@@ -7,12 +7,12 @@ def create_grammar(mode):
     Grammar = {}
     #### Terminals ####
     # delexicalized segmenter, so stems can theoretically be anything
-    Grammar['PART_0'] = FST.re("'':''[a-z A-Z $\*]+'':'_PART'")
+    Grammar['PART_0'] = FST.re("'':''[a-z A-Z \$\*]+'':'_PART'")
     if mode == 'baseword':
-        Grammar['NOM_0'] = FST.re("'':''[a-z A-Z $\*]+'':'_NOM'")
-        Grammar['VERB_0_iv'] = FST.re("'':''[a-z A-Z $\*]+'':'_IV'")
-        Grammar['VERB_0_pv'] = FST.re("'':''[a-z A-Z $\*]+'':'_PV'")
-        Grammar['VERB_0_cv'] = FST.re("'':''[a-z A-Z $\*]+'':'_CV'")
+        Grammar['NOM_0'] = FST.re("'':''[a-z A-Z \$\*]+'':'_NOM'")
+        Grammar['VERB_0_iv'] = FST.re("'':''[a-z A-Z \$\*]+'':'_IV'")
+        Grammar['VERB_0_pv'] = FST.re("'':''[a-z A-Z \$\*]+'':'_PV'")
+        Grammar['VERB_0_cv'] = FST.re("'':''[a-z A-Z \$\*]+'':'_CV'")
     else:
         # nominal suffixes
         Grammar['NOM_SUFF'] = FST.re("'':'\_\+''':'_MS'|\
@@ -42,10 +42,10 @@ def create_grammar(mode):
                                      '':''y'':(('_IV3MS'|'_IV3UP')'\+\_')")
 
 
-        Grammar['NOM_0'] = FST.re("'':''[a-z A-Z $\*]+'':'_NOM' $NOM_SUFF?", Grammar)
-        Grammar['VERB_0_iv'] = FST.re("$IV_PREF '':''[a-z A-Z $\*]+'':'_IV' $IV_SUFF?", Grammar)
-        Grammar['VERB_0_pv'] = FST.re("'':''[a-z A-Z $\*]+'':'_PV' $PV_SUFF", Grammar)
-        Grammar['VERB_0_cv'] = FST.re("'':''[a-z A-Z $\*]+'':'_CV' $CV_SUFF", Grammar)
+        Grammar['NOM_0'] = FST.re("'':''[a-z A-Z \$\*]+'':'_NOM' $NOM_SUFF?", Grammar)
+        Grammar['VERB_0_iv'] = FST.re("$IV_PREF '':''[a-z A-Z \$\*]+'':'_IV' $IV_SUFF?", Grammar)
+        Grammar['VERB_0_pv'] = FST.re("'':''[a-z A-Z \$\*]+'':'_PV' $PV_SUFF", Grammar)
+        Grammar['VERB_0_cv'] = FST.re("'':''[a-z A-Z \$\*]+'':'_CV' $CV_SUFF", Grammar)
 
 
     ### Enclitics ###
@@ -97,25 +97,27 @@ def create_grammar(mode):
 
     Grammar['PART'] = FST.re('$PART_0 $PRON_n?', Grammar)
     Grammar['NOM'] = FST.re("$PART_n? ($ART? $NOM_0|$NOM_0 $PRON_n?)", Grammar)
-    Grammar['VERB'] = FST.re("$VERB_1 | ($m_NEG? $VERB_2 $NEG_PART?)", Grammar)
+    Grammar['VERB'] = FST.re("$VERB_1 | ($m_NEG $VERB_2 $NEG_PART) | $VERB_2", Grammar)
 
     return Grammar
 
 def create_segmenter(Grammar):
-    return FST.re('$CONJ? ($PART|$NOM|$VERB)', Grammar)
+    segmenter = FST.re('$CONJ? ($PART|$NOM|$VERB)', Grammar)
+    segmenter = segmenter.epsilon_remove().determinize().minimize()
+    return segmenter
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--mode', type=str, help='"baseword" for baseword \
+    parser.add_argument('-m', '--mode', type=str, help='"baseword" for baseword \
                         segmentation only, stemming will be assumed otherwise')
-    parser.add_argument('--filter', type=str, help='return segmentations with \
+    parser.add_argument('-f', '--filter', type=str, help='return segmentations with \
                         matching core POS "PV,CV,IV,NOM,PART", otherwise all \
                         segmentations will be returned')
-    parser.add_argument('--word', type=str, help='word to be segmented')
+    parser.add_argument('-w', '--word', type=str, help='word to be segmented', required=True)
     args = parser.parse_args()
 
-    mode = args.mode.lower()
-    filtering = args.filter.upper()
+    mode = args.mode
+    filtering = args.filter
     word = args.word
 
     Grammer = create_grammar(mode)
@@ -123,9 +125,9 @@ if __name__ == "__main__":
 
 
     if filtering in ['PV', 'CV', 'IV', 'NOM', 'PART']:
-        segmentations = [x for x in list(segmenter.generate(word)) if f'_{filtering}' in x]
+        segmentations = set([x for x in list(segmenter.generate(word)) if f'_{filtering}' in x])
     else:
-        segmentations = list(segmenter.generate(word))
+        segmentations = set(list(segmenter.generate(word)))
 
-    gr_segs = sorted(segmentations, key=lambda x: len(re.split("\+_|_\+", x)), reverse=True)
+    gr_segs = sorted(list(segmentations), key=lambda x: len(re.split("\+_|_\+", x)), reverse=True)
     print('\n'.join(gr_segs))
